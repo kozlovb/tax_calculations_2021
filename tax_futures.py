@@ -18,7 +18,8 @@ class KrakenLogEntry:
 class KrakenLogs:
     def __init__(self,filename):
         self.kraken_trades = [] 
-        self.read_kraken_logs(filename)   
+        if filename:
+            self.read_kraken_logs(filename)   
 
     def read_kraken_logs(self, filename):
         with open(filename, "r") as f:
@@ -67,7 +68,8 @@ class StateEntry:
 class State:
     def __init__(self, state_filename):
         self.state = []
-        self.read_state(state_filename)
+        if state_filename:
+            self.read_state(state_filename)
 
     def read_state(self, state_filename):
         with open(state_filename,"r") as file:
@@ -97,7 +99,7 @@ class State:
         for r in self.state:
             if amount == 0:
                 new_state.append(r)
-            if amount > r.qty:
+            elif amount > r.qty:
                 amount = amount - r.qty
                 if datetime.fromtimestamp(r.time_epoch) + timedelta(days = 365) > datetime.fromtimestamp(since_ep):
                     taxable += r.qty*(price - r.price)
@@ -109,7 +111,7 @@ class State:
         self.state = new_state
         return taxable
 
-    def process(self, kraken_log, price_filename):
+    def process(self, kraken_logs, price_filename):
         taxable_early_sell = 0
         price_info = read_prices(price_filename)
         one_time_sold_btc_treated = False
@@ -142,18 +144,19 @@ def determine_price(trade_id, since_ep_date, price_info):
     price = request_price_online(since_ep_date)
     return float(price)
 
-#Execution
-state = State("register.txt")
-kraken_logs = KrakenLogs("kraken_log.txt")
+if __name__ == "__main__":
+    #Execution
+    state = State("register.txt")
+    kraken_logs = KrakenLogs("kraken_log.txt")
 
-taxable_early_sell = state.process(kraken_logs, "price.txt")
+    taxable_early_sell = state.process(kraken_logs, "price.txt")
 
-state.save("new_register2.txt")
+    state.save("new_register.txt")
 
-print("Taxes from early sell", taxable_early_sell)
+    print("Taxes from early sell", taxable_early_sell)
 
-report = ReportOnKrakenTrades(kraken_logs)
-btc_report , eur_report = report.generate_report("price.txt")
+    report = ReportOnKrakenTrades(kraken_logs)
+    btc_report , eur_report = report.generate_report("price.txt")
 
-print("btc_profit", btc_report.profit, "btc_loss", btc_report.loss, "btc_fee", btc_report.fee)
-print("eur_profit", eur_report.profit, "eur_loss", eur_report.loss, "eur_fee", eur_report.fee)
+    print("btc_profit", btc_report.profit, "btc_loss", btc_report.loss, "btc_fee", btc_report.fee)
+    print("eur_profit", eur_report.profit, "eur_loss", eur_report.loss, "eur_fee", eur_report.fee)
