@@ -9,8 +9,8 @@ def parse_to_date(line):
     # datetime(year, month, day, hour, minute, second, microsecond)
     return datetime(int(year_month_day[0]), int(year_month_day[1]), int(year_month_day[2]), int(hour_min_sec[0]), int(hour_min_sec[1]), int(hour_min_sec[2]))
 
-def read_prices():
-    file2 = open("/Users/bkozlov/Desktop/OldKomputer/TAX/KrakenFutures/price.txt", 'r')
+def read_prices(filename):
+    file2 = open(filename, 'r')
     prices = file2.readlines()
     price_info = []
     for p in prices:

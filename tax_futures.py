@@ -41,8 +41,8 @@ class ReportOnKrakenTrades:
     def __init__(self, kraken_log):
         self.kraken_log = kraken_log
         
-    def generate_report(self):
-        price_info = read_prices()
+    def generate_report(self, price_filename):
+        price_info = read_prices(price_filename)
         eur_report = ReportEntry(0,0,0)
         btc_report = ReportEntry(0,0,0)
         for trade in self.kraken_log.kraken_trades:
@@ -59,7 +59,7 @@ class ReportOnKrakenTrades:
 
 # A state entry consists of quantity, time in seconds since epoch and price
 class StateEntry:
-    def __init__(self, qty, time_epoch: float, price):
+    def __init__(self, qty, time_epoch, price):
         self.qty = qty
         self.time_epoch = time_epoch
         self.price = price
@@ -109,9 +109,9 @@ class State:
         self.state = new_state
         return taxable
 
-    def process(self, kraken_log):
+    def process(self, kraken_log, price_filename):
         taxable_early_sell = 0
-        price_info = read_prices()
+        price_info = read_prices(price_filename)
         one_time_sold_btc_treated = False
         for kraken_log in kraken_logs.kraken_trades:
             if 1626210760 < kraken_log.since_epoch and not one_time_sold_btc_treated:
@@ -146,13 +146,14 @@ def determine_price(trade_id, since_ep_date, price_info):
 state = State("register.txt")
 kraken_logs = KrakenLogs("kraken_log.txt")
 
-taxable_early_sell = state.process(kraken_logs)
+taxable_early_sell = state.process(kraken_logs, "price.txt")
 
 state.save("new_register2.txt")
 
 print("Taxes from early sell", taxable_early_sell)
 
 report = ReportOnKrakenTrades(kraken_logs)
-btc_report , eur_report = report.generate_report()
+btc_report , eur_report = report.generate_report("price.txt")
+
 print("btc_profit", btc_report.profit, "btc_loss", btc_report.loss, "btc_fee", btc_report.fee)
 print("eur_profit", eur_report.profit, "eur_loss", eur_report.loss, "eur_fee", eur_report.fee)

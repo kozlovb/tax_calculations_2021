@@ -1,14 +1,18 @@
 import pytest
- import functions
- import time
+from tax_futures import *
 
- def test_readStateFile(tmp_path):
-     # Create a temporary file with test data
-     test_file = tmp_path / "test.txt"
-     test_file.write_text("amount,data,price")
+SECONDS_IN_YEAR = 31536000 
 
-     # Call the function with the test file
-     arrdata = functions.readStateFile(test_file)
-     result  = arrdata[0].price
-     # Assert that the result is equal to the expected output
-     assert result == "price"
+def test_update_state(kraken_logs, state):
+    taxable_early_sell = state.process(kraken_logs)
+    assert taxable_early_sell == 10
+
+
+#
+state = State()
+kraken_logs = KrakenLogs()
+kraken_logs()
+
+state.state.append(StateEntry(1, 10000, 1000))
+state.state.append(StateEntry(1, 20000, 1000))
+state.state.append(StateEntry(1, 10000, 1000))
