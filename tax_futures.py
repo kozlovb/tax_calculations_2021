@@ -137,6 +137,10 @@ class State:
             self.my_change += amount_after_trade - amount_before_trade
             self.kraken_change += kraken_log.change
             taxable_early_sell += taxable_delta
+
+        # here we have to add the last spot trade that is not in the kraken logs
+        taxable_delta = self.update_state_with_trade(-0.2, 1640796526, 42030, 0)
+
         return taxable_early_sell
 
     def save(self, filename):
@@ -166,7 +170,6 @@ def determine_price(trade_id, since_ep_date, price_info):
     return float(price)
 
 if __name__ == "__main__":
-    #Execution
     state = State("register.txt")
     print("amount of btc in register on year sart", state.output_current_amount())
     kraken_logs = KrakenLogs("kraken_log.txt")
