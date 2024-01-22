@@ -2,24 +2,26 @@
 from datetime import datetime
 from datetime import timedelta
 from retrieve_data_module import *
+#from revert_filter_file import *
 from utils import *
 
 #0   1        2       3    4      5      6           7                       8           9          10           11           12  13               14    
 #uid,dateTime,account,type,symbol,change,new balance,new average entry price,trade price,mark price,funding rate,realized pnl,fee,realized funding,collateral
 # we are interested only in 1- dateTime, 11-realized pnl, 12 - fee.
 class KrakenLogEntry:
-    def __init__(self, uid, since_epoch, realized_pnl, fee):
+    def __init__(self, uid, since_epoch, realized_pnl, fee, new_balance, change):
         self.uid = uid
         self.since_epoch = since_epoch
         self.realized_pnl = realized_pnl
         self.fee = fee
+        self.new_balance = new_balance
+        self.change = change
 
 # class that reads KrakenLogs
 class KrakenLogs:
     def __init__(self,filename):
         self.kraken_trades = [] 
-        if filename:
-            self.read_kraken_logs(filename)   
+        self.read_kraken_logs(filename)   
 
     def read_kraken_logs(self, filename):
         with open(filename, "r") as f:
@@ -27,7 +29,12 @@ class KrakenLogs:
             for l in lines:
                 fields = l.split(',')
                 if fields[2] == 'f-xbt:usd' and fields[3] == 'futures trade' and fields[4] == 'xbt':
-                    self.kraken_trades.append(KrakenLogEntry(fields[0], parse_to_date(fields[1]).timestamp(), float(fields[11]), float(fields[12])))
+                    if fields[11] == '':
+                        fields[11] = '0'
+                    if fields[5] == '':
+                        fields[5] = '0'
+                    if parse_to_date(fields[1]).timestamp() < 1640995200+3600*24:
+                        self.kraken_trades.append(KrakenLogEntry(fields[0], parse_to_date(fields[1]).timestamp(), float(fields[12]), float(fields[13]), float(fields[7]),float(fields[6])))
             self.kraken_trades.reverse()
      
 class ReportEntry:
@@ -41,7 +48,7 @@ class ReportEntry:
 class ReportOnKrakenTrades:
     def __init__(self, kraken_log):
         self.kraken_log = kraken_log
-        
+    
     def generate_report(self, price_filename):
         price_info = read_prices(price_filename)
         eur_report = ReportEntry(0,0,0)
@@ -60,16 +67,18 @@ class ReportOnKrakenTrades:
 
 # A state entry consists of quantity, time in seconds since epoch and price
 class StateEntry:
-    def __init__(self, qty, time_epoch, price):
+    def __init__(self, qty, time_epoch: float, price):
         self.qty = qty
         self.time_epoch = time_epoch
         self.price = price
 
+
 class State:
     def __init__(self, state_filename):
         self.state = []
-        if state_filename:
-            self.read_state(state_filename)
+        self.read_state(state_filename)
+        self.kraken_change = 0
+        self.my_change = 0
 
     def read_state(self, state_filename):
         with open(state_filename,"r") as file:
@@ -122,7 +131,11 @@ class State:
                 taxable_early_sell += taxable_delta - 408
                 one_time_sold_btc_treated = True
             price = determine_price(kraken_log.uid, kraken_log.since_epoch, price_info)
+            amount_before_trade = self.output_current_amount()
             taxable_delta = self.update_state_with_trade(kraken_log.realized_pnl, kraken_log.since_epoch, price, kraken_log.fee) 
+            amount_after_trade = self.output_current_amount()
+            self.my_change += amount_after_trade - amount_before_trade
+            self.kraken_change += kraken_log.change
             taxable_early_sell += taxable_delta
         return taxable_early_sell
 
@@ -136,23 +149,34 @@ class State:
                     exit()
                 old_timestamp = new_timestamp
                 f.write(str(r.qty) + "," + str(r.time_epoch) + "," + str(r.price)+ "\n")
-      
+
+    def output_current_amount(self):
+        amount = 0
+        for r in self.state:
+            amount += r.qty
+        return amount
 def determine_price(trade_id, since_ep_date, price_info):
     for p in price_info:
         if p[0] == trade_id:
             return float(p[2])
+    # here open file for writing
     price = request_price_online(since_ep_date)
+    with open("price.txt", "a") as f:
+        f.write(trade_id + "," + str(since_ep_date) + "," + str(float(price)) + "\n")
     return float(price)
 
 if __name__ == "__main__":
     #Execution
     state = State("register.txt")
+    print("amount of btc in register on year sart", state.output_current_amount())
     kraken_logs = KrakenLogs("kraken_log.txt")
 
     taxable_early_sell = state.process(kraken_logs, "price.txt")
+    print("kraken_change",state.kraken_change)
+    print("my_change", state.my_change)    
 
     state.save("new_register.txt")
-
+    print("amount of btc in register on year end", state.output_current_amount())
     print("Taxes from early sell", taxable_early_sell)
 
     report = ReportOnKrakenTrades(kraken_logs)
